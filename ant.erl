@@ -43,7 +43,7 @@ antLoop({State, {_X, _Y}=Coords, Counter, Direction}, Map) ->
     NewCoords = updateCoords(Coords, NewDirection),
     %Update position
     Map ! {positionUpdate, Coords, NewCoords, self()},
-    timer:sleep(80),
+    timer:sleep(120),
     antLoop({NewState, NewCoords, NewCounter, NewDirection}, Map).
 
 

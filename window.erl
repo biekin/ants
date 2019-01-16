@@ -1,27 +1,25 @@
 -module(window).
 -export([startWindow/1]).
 
-startWindow(MapPid) ->
-    spawn(fun() -> windowLoop(init, a, MapPid) end).
+startWindow(Map) ->
+    spawn(fun() -> windowLoop(init, a, Map, a) end).
 
-windowLoop(State, Panel, MapPid) ->
+windowLoop(State, Panel, Map, Background) ->
     case State of 
         init ->
             NewPanel = initWindow(),
-            NewState = run;
-        run ->
-            MapPid ! {sendState, self()},
-            %timer:sleep(5),
-            %MapPid ! {sendState, self()},
-            receive 
-                {state, Map} ->
-                    draw(Panel, Map)
-            end,
             NewState = run,
-            NewPanel = Panel
+            Image = wxImage:new("back.png"),
+            NewBackground = wxBitmap:new(Image);
+        run ->
+            %timer:sleep(5)
+            draw(Panel, Map, Background),
+            NewState = run,
+            NewPanel = Panel,
+            NewBackground = Background
     end,
     timer:sleep(20),
-    windowLoop(NewState, NewPanel, MapPid).
+    windowLoop(NewState, NewPanel, Map, NewBackground).
 
 initWindow() ->
     Wx = wx:new(),
@@ -31,17 +29,18 @@ initWindow() ->
     wxFrame:show(Frame),
     Panel.
 
-draw(Panel, Map) ->
+draw(Panel, Map, Bitmap) ->
+    Ants = ets:foldl(fun({Key, List}, Acc) -> addIfAnt(Acc, List, Key) end, [], Map),
     ClientDC = wxClientDC:new(Panel),
-
-    Image = wxImage:new("back.png"),
-    Bitmap = wxBitmap:new(Image),
     wxDC:drawBitmap(ClientDC, Bitmap, {0,0}),
     wxDC:setPen(ClientDC, wxPen:new({0, 0, 0, 255}, [{width, 1}])),
-    
-    Ants = maps:filter(fun(Key, Val) -> lists:any(fun({ant, _}) -> true;(_)->false end ,Val) end, Map),
-    lists:foreach(fun({X,Y}) -> wxDC:drawCircle(ClientDC, {X, Y}, 1) end, maps:keys(Ants)),
+    %io:format("~p", Ants),
+    lists:foreach(fun({X,Y}) -> wxDC:drawCircle(ClientDC, {X, Y}, 1) end, Ants),
 
-    wxBitmap:destroy(Bitmap),
     wxClientDC:destroy(ClientDC).
-    %timer:sleep(20).
+
+addIfAnt(Acc, List, Key) ->
+    case lists:any(fun({ant, _}) -> true;(_)-> false end, List) of
+        true -> [Key | Acc];
+        false -> Acc
+    end.

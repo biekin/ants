@@ -9,18 +9,20 @@
 -define(MapWidth, 600).
 
 start() ->
-    Map = maps:from_list([{{1, 1}, [hole]}, {{19, 19}, [food]}]),
-    init(Map).
+    Map = ets:new(map, [public, {read_concurrency, true}, {write_concurrency, true}]),
+    %Map = maps:from_list([{{1, 1}, [hole]}, {{19, 19}, [food]}]),
+    init(Map),
+    Map.
 
 init(Map) ->
     MapPid = spawn(fun() -> mapLoop(Map) end),
-    window:startWindow(MapPid),
+    window:startWindow(Map),
     for(200, fun() -> ant:start(MapPid) end).
 
 for(0,_) -> ok; 
 for(N,Fun) when N > 0 -> 
    Fun(),
-   timer:sleep(50),
+   timer:sleep(100),
    for(N-1, Fun). 
 
 mapLoop(Map) ->
@@ -30,27 +32,33 @@ mapLoop(Map) ->
         %{nearHole, {X, Y} = Coords, AntPid} -> 0;
         {sendState, Pid} ->
             Pid ! {state, Map},
-            NewMap = Map;
+            Map;
         {newAnt, {X, Y} = Coords, AntPid} ->
             %io:format("~p - ~p \n", [Coords, AntPid]),
-            NewMap = addElementInMap(Coords, {ant, AntPid}, Map);
+            addElementInMap(Coords, {ant, AntPid}, Map);
         {positionUpdate, {X, Y} = Coords, {NX, NY} = NewCoords, AntPid} ->
             %io:format("~p - ~p \n", [Coords, NewCoords]),
-            NewMap = moveElementInMap(Coords, NewCoords, {ant, AntPid}, Map)
+            moveElementInMap(Coords, NewCoords, {ant, AntPid}, Map)
     end,
-    mapLoop(NewMap).
+    mapLoop(Map).
 
 %%-----------------------------------------
 %% Helper functions
 %%-----------------------------------------
 moveElementInMap(Key, NewKey, Elem, Map) ->
-    OldKeyList = maps:get(Key, Map, []),
+    [{Key, OldKeyList}] = ets:lookup(Map, Key),
     NewKeyList = lists:delete(Elem, OldKeyList),
-    OldNewKeyList = maps:get(NewKey, Map, []),
-    NewNewKeyList = [Elem | OldNewKeyList],
-    maps:put(NewKey, NewNewKeyList ,maps:put(Key, NewKeyList, Map)).
+    OldNewKeyList = ets:lookup(Map, NewKey),
+    case OldNewKeyList of
+        [] -> ets:insert(Map, {NewKey, [Elem]});
+        [{NewKey, List}] -> ets:update_element(Map, NewKey, {2, [Elem | List]})
+    end,
+    ets:update_element(Map, Key, {2, NewKeyList}).
+    
 
 addElementInMap(Key, Elem, Map) ->
-    OldList = maps:get(Key, Map, []),
-    NewList = [Elem | OldList],
-    maps:put(Key, NewList, Map).
+    List = ets:lookup(Map, Key),
+    case List of
+        [] -> ets:insert_new(Map, {Key, [Elem]});
+        [{Key, L}] -> ets:update_element(Map, Key, {2, [Elem | L]})        
+    end.
