@@ -84,22 +84,29 @@ antLoop({Delay, State, {X, Y}=Coords, Counter, Direction}, Map, PK) ->
                     ProbCoords = getMaxPheromone(PheromoneCoords),
                     ProbDirection = Direction,
                     ProbCounter = Counter - 1,
-                    case isCloserToHole(Coords, ProbCoords) and (ProbCounter > 0) of 
+                    case isCloserToHole(Coords, ProbCoords) or (ProbCounter == 0) of 
                         false ->
-                            NewDirection = getHoleDirection(X, Y),
+                            NewDirection = 
+                                case random:uniform(100) rem 2 of
+                                    1 -> getHoleDirection(X, Y);
+                                    _ -> getNewDirection(Direction)
+                                end,     
                             NewCoords = updateCoords(Coords, NewDirection),
-                            NewCounter = 10;
+                            NewCounter = ProbCounter;
                         _ -> 
                             NewDirection = ProbDirection,
                             NewCoords = ProbCoords,
-                            NewCounter = ProbCounter
+                            NewCounter = 10
                     end
             end,
             ProbState = 2
     end,
     %io:format("~p \n",[NewDirection]),
     %Update position
-    receive 
+    receive
+        stopkataklizm ->
+            NewDelay = 80,
+            NewState = 1; 
         kataklizm ->
             NewDelay = 50,
             NewState = 2
@@ -132,10 +139,10 @@ getNewDirection(Direction) ->
 %% Coordinates update according to direction
 %%-----------------------------------------
 
-updateCoords({X, Y},n) when Y >= ?MapHeigth - 5 -> {X, ?MapHeigth -6};
+updateCoords({X, ?MapHeigth - 10},n) -> {X, ?MapHeigth -9};
 %updateCoords({250,Y},n) when Y >= 246, Y =< 249 -> {250, Y-1};
 updateCoords({X,Y},n) -> {X, Y+1};
-updateCoords({X,Y},e) when X >= ?MapWidth -5 -> {?MapWidth -6, Y};
+updateCoords({?MapWidth -10,Y},e) -> {?MapWidth -9, Y};
 %updateCoords({X,250},e) when X >= 246, X =< 249 -> {X-1, 250};
 updateCoords({X,Y},e) -> {X+1, Y};
 updateCoords({X,5},s) -> {X, 6};

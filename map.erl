@@ -20,7 +20,7 @@ start() ->
     ets:insert(Map, {{250, 249}, pheromone, 10000000000}),
     ets:insert(Map, {{249, 250}, pheromone, 10000000000}),
     ets:insert(Map, {{249, 249}, pheromone, 10000000000}),
-    for(50, fun() -> addRandomFood(Map) end),
+    for(30, fun() -> addRandomFood(Map) end),
     %Map = maps:from_list([{{1, 1}, [hole]}, {{19, 19}, [food]}]),
     init(Map).
     %Map.
@@ -43,6 +43,8 @@ mapLoop(Map) ->
             lists:foreach(fun([Pid]) -> Pid ! die end, ets:match(Map, {'_', ant, '$1'}))
         after 0 ->
             receive
+                stopkataklizm ->
+                        lists:foreach(fun([Pid]) -> Pid ! stopkataklizm end, ets:match(Map, {'_', ant, '$1'}));
                 kataklizm ->
                     lists:foreach(fun([Pid]) -> Pid ! kataklizm end, ets:match(Map, {'_', ant, '$1'}));
                 {pheromoneNear, {X, Y}, Direction, AntPid} ->
@@ -86,4 +88,4 @@ addFood(X, Y, Map) ->
     ets:insert(Map, {{X+6, Y+6}, food}).
 
 addRandomFood(Map) ->
-    addFood(rand:uniform(500), rand:uniform(500), Map).
+    addFood(rand:uniform(400) + 50, rand:uniform(400) + 50, Map).

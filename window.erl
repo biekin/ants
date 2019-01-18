@@ -4,46 +4,70 @@
 -include_lib("wx/include/wx.hrl").
 
 startWindow(Map, MapPid, HolePid) ->
-    spawn(fun() -> windowLoop(init, a, Map, a, a, MapPid, HolePid) end).
+    spawn(fun() -> windowLoop(init, a, Map, a, a, a, MapPid, HolePid, false) end).
 
-windowLoop(State, Panel, Map, Background, Frame, MapPid, HolePid) ->
+windowLoop(State, Panel, Map, Background, BackRain, Frame, MapPid, HolePid, Kataklizm) ->
     case State of 
         init ->
             {NewPanel, NewFrame} = initWindow(self()),
             NewState = run,
             Image = wxImage:new("back.png"),
-            NewBackground = wxBitmap:new(Image);
+            NewBackground = wxBitmap:new(Image),
+            Image2 = wxImage:new("back-rain.png"),
+            NewBackRain = wxBitmap:new(Image2);
         run ->
             %timer:sleep(5)
-            draw(Panel, Map, Background),
+            case Kataklizm of
+                true -> draw(Panel, Map, BackRain);
+                false -> draw(Panel, Map, Background)
+            end,
             NewState = run,
             NewFrame = Frame,
             NewPanel = Panel,
-            NewBackground = Background
+            NewBackground = Background,
+            NewBackRain = BackRain
     end,
     receive
-        kataklizm -> MapPid ! kataklizm 
-        after 0 -> ok
+        stopkataklizm ->
+            case Kataklizm of
+                false ->
+                    NewKataklizm = Kataklizm;
+                _ -> 
+                    MapPid ! stopkataklizm,
+                    NewKataklizm = false
+            end;
+        kataklizm -> 
+            case Kataklizm of
+                true ->
+                    NewKataklizm = Kataklizm;
+                _ -> 
+                    MapPid ! kataklizm,
+                    NewKataklizm = true
+            end 
+        after 0 -> 
+            NewKataklizm = Kataklizm
     end,
     receive
         die -> 
             HolePid ! die,
             MapPid ! die
         after 10 -> 
-            windowLoop(NewState, NewPanel, Map, NewBackground, NewFrame, MapPid, HolePid)
+            windowLoop(NewState, NewPanel, Map, NewBackground, NewBackRain, NewFrame, MapPid, HolePid, NewKataklizm)
     end.
 
 initWindow(Pid) ->
     Wx = wx:new(),
-    Frame = wxFrame:new(Wx, -1, "Ants", [{size, {500, 550}}]),
+    Frame = wxFrame:new(Wx, -1, "Ants", [{size, {500, 680}}]),
     Panel = wxPanel:new(Frame),
     Sizer = wxStaticBoxSizer:new(?wxVERTICAL, Panel, [{label, "Ants"}]),
     MainSizer = wxBoxSizer:new(?wxVERTICAL),    
     B = wxButton:new(Panel, 10, [{label,"Kataklizm"}]),
+    BS = wxButton:new(Panel, 10, [{label,"Zatrzymaj Kataklizm"}]),
     Canvas = wxPanel:new(Panel),
     wxFrame:connect(Canvas, paint),
 
     wxSizer:add(Sizer, B, [{border, 5}, {flag, ?wxALL}]),
+    wxSizer:add(Sizer, BS, [{border, 5}, {flag, ?wxALL}]),
     wxSizer:addSpacer(Sizer, 5),
     wxSizer:add(Sizer, Canvas, [{flag, ?wxEXPAND},
 				{proportion, 1}]),
@@ -59,6 +83,11 @@ initWindow(Pid) ->
                  Pid ! kataklizm
                  end
              }]),
+    wxButton:connect(BS, command_button_clicked, [{callback,
+            fun(Evt, Obj) ->
+                Pid ! stopkataklizm
+                end
+            }]),
     wxFrame:connect(Frame, close_window, [{callback,
         fun(Evt, Obj) ->
             %io:format("click~n  event = ~p~n  obj = ~p~n", [Evt, Obj]),
