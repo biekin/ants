@@ -43,6 +43,8 @@ mapLoop(Map) ->
             lists:foreach(fun([Pid]) -> Pid ! die end, ets:match(Map, {'_', ant, '$1'}))
         after 0 ->
             receive
+                kataklizm ->
+                    lists:foreach(fun([Pid]) -> Pid ! kataklizm end, ets:match(Map, {'_', ant, '$1'}));
                 {pheromoneNear, {X, Y}, Direction, AntPid} ->
                     PheromoneCoords = lists:flatmap(fun(Coord = {X, Y}) -> ets:match_object(Map, {Coord, pheromone, '_'}) end, [{X+1, Y+1}, {X, Y+1}, {X+1, Y}, {X-1, Y+1}, {X+1, Y-1}, {X-1, Y-1}, {X-1, Y}, {X, Y-1}]),
                     AntPid ! {pheromone, PheromoneCoords};

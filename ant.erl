@@ -12,16 +12,16 @@
 -define(Directions, [n, ne, e, se, s, sw, w, nw]).
 
 start(Map, PK) ->
-	spawn(fun() -> antLoop({0, {250,250}, 20, n}, Map, PK) end).
+	spawn(fun() -> antLoop({80, 0, {250,250}, 20, n}, Map, PK) end).
 
 
-antLoop({State, {X, Y}=Coords, Counter, Direction}, Map, PK) ->
+antLoop({Delay, State, {X, Y}=Coords, Counter, Direction}, Map, PK) ->
 	case State of
 		0 ->
             PK ! {newAnt, Coords, self()},
 			Index = rand:uniform(length(?Directions) - 1) + 1,
             NewDirection = lists:nth(Index,?Directions),
-            NewState = 1,
+            ProbState = 1,
             NewCounter = Counter - 1,
             NewCoords = updateCoords(Coords, NewDirection);
         1 ->
@@ -35,15 +35,15 @@ antLoop({State, {X, Y}=Coords, Counter, Direction}, Map, PK) ->
                         0 ->
                             NewCounter = rand:uniform(300) rem 30,
                             NewDirection = getNewDirection(Direction),
-                            NewState = 1;
+                            ProbState = 1;
                         _ ->
                             NewCounter = Counter - 1,
                             NewDirection = Direction,
-                            NewState = 1 % In next step, ask about food after coord update and then change state accordingly
+                            ProbState = 1 % In next step, ask about food after coord update and then change state accordingly
                     end;
                 _ ->
-                    timer:sleep(8000),
-                    NewState = 2,
+                    timer:sleep(2000),
+                    ProbState = 2,
                     NewDirection = getOppositeDirection(Direction),
                     NewCounter = 15 + rand:uniform(300) rem 30
             end,
@@ -81,29 +81,44 @@ antLoop({State, {X, Y}=Coords, Counter, Direction}, Map, PK) ->
                             NewDirection = ProbDirection
                     end;
                 true -> 
-                    NewCoords = getMaxPheromone(PheromoneCoords),
+                    ProbCoords = getMaxPheromone(PheromoneCoords),
                     ProbDirection = Direction,
-                    NewCounter = Counter,
-                    case isCloserToHole(Coords, NewCoords) of 
+                    ProbCounter = Counter - 1,
+                    case isCloserToHole(Coords, ProbCoords) and (ProbCounter > 0) of 
                         false ->
-                            NewDirection = getNewDirection(Direction);
+                            NewDirection = getHoleDirection(X, Y),
+                            NewCoords = updateCoords(Coords, NewDirection),
+                            NewCounter = 10;
                         _ -> 
-                            NewDirection = ProbDirection
+                            NewDirection = ProbDirection,
+                            NewCoords = ProbCoords,
+                            NewCounter = ProbCounter
                     end
             end,
-            NewState = 2
+            ProbState = 2
     end,
     %io:format("~p \n",[NewDirection]),
     %Update position
-    timer:sleep(40),
-    {NX, NY} = NewCoords,
-    if  
-        State == 2 , abs(NX - 250) =< 0  , abs(NY - 250) =< 0 -> 
-            PK ! {positionUpdate, Coords, NewCoords, self(), State},
-            PK ! {died, NewCoords, self()};
-        true -> 
-            PK ! {positionUpdate, Coords, NewCoords, self(), State},
-            antLoop({NewState, NewCoords, NewCounter, NewDirection}, Map, PK)
+    receive 
+        kataklizm ->
+            NewDelay = 50,
+            NewState = 2
+        after 0 ->
+            NewDelay = Delay,
+            NewState = ProbState
+    end,
+    receive 
+        die -> ok
+        after Delay ->
+            {NX, NY} = NewCoords,
+            if  
+                State == 2 , abs(NX - 250) =< 0  , abs(NY - 250) =< 0 -> 
+                    PK ! {positionUpdate, Coords, NewCoords, self(), State},
+                    PK ! {died, NewCoords, self()};
+                true -> 
+                    PK ! {positionUpdate, Coords, NewCoords, self(), State},
+                    antLoop({NewDelay, NewState, NewCoords, NewCounter, NewDirection}, Map, PK)
+            end
     end.
 
 

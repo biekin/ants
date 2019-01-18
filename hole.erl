@@ -7,7 +7,7 @@ startHole(NumberOfAnts, Fun) ->
 holeLoop(Counter, Fun) ->
     receive
         die -> ok
-        after 100 ->
+        after 20 ->
             case Counter of
                 0 -> ok;
                 N -> 

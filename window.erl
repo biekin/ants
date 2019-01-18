@@ -21,7 +21,11 @@ windowLoop(State, Panel, Map, Background, Frame, MapPid, HolePid) ->
             NewPanel = Panel,
             NewBackground = Background
     end,
-    receive 
+    receive
+        kataklizm -> MapPid ! kataklizm 
+        after 0 -> ok
+    end,
+    receive
         die -> 
             HolePid ! die,
             MapPid ! die
@@ -52,7 +56,7 @@ initWindow(Pid) ->
 
     wxButton:connect(B, command_button_clicked, [{callback,
              fun(Evt, Obj) ->
-                 io:format("click~n  event = ~p~n  obj = ~p~n", [Evt, Obj])
+                 Pid ! kataklizm
                  end
              }]),
     wxFrame:connect(Frame, close_window, [{callback,
