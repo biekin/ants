@@ -1,13 +1,15 @@
 -module(window).
--export([startWindow/1]).
+-export([startWindow/3]).
 
-startWindow(Map) ->
-    spawn(fun() -> windowLoop(init, a, Map, a) end).
+-include_lib("wx/include/wx.hrl").
 
-windowLoop(State, Panel, Map, Background) ->
+startWindow(Map, MapPid, HolePid) ->
+    spawn(fun() -> windowLoop(init, a, Map, a, a, MapPid, HolePid) end).
+
+windowLoop(State, Panel, Map, Background, Frame, MapPid, HolePid) ->
     case State of 
         init ->
-            NewPanel = initWindow(),
+            {NewPanel, NewFrame} = initWindow(self()),
             NewState = run,
             Image = wxImage:new("back.png"),
             NewBackground = wxBitmap:new(Image);
@@ -15,28 +17,70 @@ windowLoop(State, Panel, Map, Background) ->
             %timer:sleep(5)
             draw(Panel, Map, Background),
             NewState = run,
+            NewFrame = Frame,
             NewPanel = Panel,
             NewBackground = Background
     end,
-    timer:sleep(20),
-    windowLoop(NewState, NewPanel, Map, NewBackground).
+    receive 
+        die -> 
+            HolePid ! die,
+            MapPid ! die
+        after 10 -> 
+            windowLoop(NewState, NewPanel, Map, NewBackground, NewFrame, MapPid, HolePid)
+    end.
 
-initWindow() ->
+initWindow(Pid) ->
     Wx = wx:new(),
-    Frame = wxFrame:new(Wx, -1, "Ants", [{size, {800, 600}}]),    
+    Frame = wxFrame:new(Wx, -1, "Ants", [{size, {500, 550}}]),
     Panel = wxPanel:new(Frame),
-    wxFrame:connect(Panel, paint),
+    Sizer = wxStaticBoxSizer:new(?wxVERTICAL, Panel, [{label, "Ants"}]),
+    MainSizer = wxBoxSizer:new(?wxVERTICAL),    
+    B = wxButton:new(Panel, 10, [{label,"Kataklizm"}]),
+    Canvas = wxPanel:new(Panel),
+    wxFrame:connect(Canvas, paint),
+
+    wxSizer:add(Sizer, B, [{border, 5}, {flag, ?wxALL}]),
+    wxSizer:addSpacer(Sizer, 5),
+    wxSizer:add(Sizer, Canvas, [{flag, ?wxEXPAND},
+				{proportion, 1}]),
+
+    wxSizer:add(MainSizer, Sizer, [{flag, ?wxEXPAND},
+				   {proportion, 1}]),
+
+    wxPanel:setSizer(Panel, MainSizer),
+    wxSizer:layout(MainSizer),
+
+    wxButton:connect(B, command_button_clicked, [{callback,
+             fun(Evt, Obj) ->
+                 io:format("click~n  event = ~p~n  obj = ~p~n", [Evt, Obj])
+                 end
+             }]),
+    wxFrame:connect(Frame, close_window, [{callback,
+        fun(Evt, Obj) ->
+            %io:format("click~n  event = ~p~n  obj = ~p~n", [Evt, Obj]),
+            Pid ! die
+            end
+        }]),
     wxFrame:show(Frame),
-    Panel.
+    {Canvas, Frame}.
 
 draw(Panel, Map, Bitmap) ->
-    Ants = ets:foldl(fun({Key, List}, Acc) -> addIfAnt(Acc, List, Key) end, [], Map),
+    ets:safe_fixtable(Map, true),
+    Ants = ets:match(Map, {'$1', ant, '_'}),
+    Food = ets:match(Map, {'$1', food}),
+    %Pheromones = ets:match(Map, {'$1', pheromone, '_'}),
     ClientDC = wxClientDC:new(Panel),
     wxDC:drawBitmap(ClientDC, Bitmap, {0,0}),
-    wxDC:setPen(ClientDC, wxPen:new({0, 0, 0, 255}, [{width, 1}])),
+    wxDC:setPen(ClientDC, wxPen:new({250, 0, 250, 255}, [{width, 1}])),
     %io:format("~p", Ants),
-    lists:foreach(fun({X,Y}) -> wxDC:drawCircle(ClientDC, {X, Y}, 1) end, Ants),
-
+    wxDC:drawCircle(ClientDC, {250, 250}, 3),
+    %wxDC:setPen(ClientDC, wxPen:new({0, 0, 255, 200}, [{width, 1}])),
+    %lists:foreach(fun([{X,Y}]) -> wxDC:drawCircle(ClientDC, {X, Y}, 1) end, Pheromones),
+    wxDC:setPen(ClientDC, wxPen:new({255, 0, 0, 255}, [{width, 2}])),
+    lists:foreach(fun([{X,Y}]) -> wxDC:drawCircle(ClientDC, {X, Y}, 1) end, Food),
+    wxDC:setPen(ClientDC, wxPen:new({0, 0, 0, 255}, [{width, 1}])),
+    lists:foreach(fun([{X,Y}]) -> wxDC:drawCircle(ClientDC, {X, Y}, 1) end, Ants),
+    ets:safe_fixtable(Map, false),
     wxClientDC:destroy(ClientDC).
 
 addIfAnt(Acc, List, Key) ->

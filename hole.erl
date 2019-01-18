@@ -1,3 +1,17 @@
 -module(hole).
--export([start/1]).
+-export([startHole/2]).
 
+startHole(NumberOfAnts, Fun) ->
+    spawn(fun() -> holeLoop(NumberOfAnts, Fun) end).
+
+holeLoop(Counter, Fun) ->
+    receive
+        die -> ok
+        after 100 ->
+            case Counter of
+                0 -> ok;
+                N -> 
+                    Fun(),
+                    holeLoop(N - 1, Fun)    
+            end
+    end.
